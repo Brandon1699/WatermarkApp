@@ -5,10 +5,9 @@ import zipfile
 import os
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Editor Móvil de Watermark", page_icon="📱", layout="centered")
+st.set_page_config(page_title="Editor Móvil Pro", page_icon="📱", layout="centered")
 
-# --- ESTILOS CSS PARA MÓVIL ---
-# Botones grandes para facilitar el toque en pantallas táctiles
+# --- ESTILOS CSS ---
 st.markdown("""
     <style>
     .stButton>button {
@@ -17,23 +16,27 @@ st.markdown("""
         height: 3.5em;
         font-weight: bold;
     }
+    /* Estilo especial para el botón de descarga individual */
+    .download-btn {
+        background-color: #4CAF50 !important;
+        color: white !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📱 Editor Móvil Pro")
+st.title("📱 Editor Móvil HD")
 
 # --- VERIFICACIÓN DE LOGOS ---
 if not os.path.exists("logo_negro.png") or not os.path.exists("logo_blanco.png"):
-    st.error("⚠️ Faltan los archivos 'logo_negro.png' y 'logo_blanco.png'.")
+    st.error("⚠️ Faltan los archivos de logo.")
     st.stop()
 
-# Cargamos logos en memoria una sola vez
 logos = {
     "Negro": Image.open("logo_negro.png"),
     "Blanco": Image.open("logo_blanco.png")
 }
 
-# --- GESTIÓN DE MEMORIA (SESSION STATE) ---
+# --- MEMORIA ---
 if 'settings' not in st.session_state:
     st.session_state.settings = {} 
 if 'current_index' not in st.session_state:
@@ -47,38 +50,37 @@ def aplicar_watermark(img_pil, color, opacidad, tamano):
 
     logo = logos[color].copy().convert("RGBA")
 
-    # 1. Opacidad
+    # Opacidad
     if opacidad < 100:
         alpha = logo.split()[3]
         factor = opacidad / 100.0
         alpha = alpha.point(lambda p: int(p * factor))
         logo.putalpha(alpha)
 
-    # 2. Tamaño
+    # Tamaño
     factor_tamano = tamano / 100.0
     ratio = logo.width / logo.height
     new_w = int(w * factor_tamano)
     new_h = int(new_w / ratio)
     
-    # Evitar errores si el tamaño es muy pequeño
     if new_w < 1: new_w = 1
     if new_h < 1: new_h = 1
     
     logo_resized = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-    # 3. Posición (Siempre Centrado)
+    # Posición Centro
     x = (w - new_w) // 2
     y = (h - new_h) // 2
 
     img.paste(logo_resized, (x, y), logo_resized)
     return img.convert("RGB")
 
-# --- INTERFAZ PRINCIPAL ---
+# --- INTERFAZ ---
 
-uploaded_files = st.file_uploader("📂 Toca aquí para subir tus fotos", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
+uploaded_files = st.file_uploader("📂 Toca aquí para subir fotos", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
 
 if uploaded_files:
-    # Control de índice para no pasarnos del límite
+    # Validar índice
     total_imgs = len(uploaded_files)
     if st.session_state.current_index >= total_imgs:
         st.session_state.current_index = total_imgs - 1
@@ -86,116 +88,99 @@ if uploaded_files:
     current_file = uploaded_files[st.session_state.current_index]
     file_id = current_file.name
 
-    # --- CONFIGURACIÓN POR DEFECTO ---
-    # Aquí es donde hemos cambiado el valor a 100
+    # Configuración por defecto (Tamaño 100, Opacidad 40)
     if file_id not in st.session_state.settings:
         st.session_state.settings[file_id] = {
             "color": "Blanco", 
-            "opacidad": 40,   # Opacidad inicial
-            "tamano": 100     # Tamaño inicial al 100%
+            "opacidad": 40,
+            "tamano": 100
         }
 
-    # Recuperamos la configuración de la foto actual
     current_conf = st.session_state.settings[file_id]
 
-    # --- BOTONES DE NAVEGACIÓN ---
+    # --- NAVEGACIÓN ---
     c_prev, c_txt, c_next = st.columns([1, 2, 1])
-    
     with c_prev:
-        if st.button("⬅️ Atrás"):
+        if st.button("⬅️"):
             if st.session_state.current_index > 0:
                 st.session_state.current_index -= 1
                 st.rerun()
-    
     with c_txt:
         st.markdown(f"<h3 style='text-align: center; margin:0'>{st.session_state.current_index + 1} / {total_imgs}</h3>", unsafe_allow_html=True)
-        st.caption(f"Editando: {current_file.name}")
-
     with c_next:
-        if st.button("Sig ➡️"):
+        if st.button("➡️"):
             if st.session_state.current_index < total_imgs - 1:
                 st.session_state.current_index += 1
                 st.rerun()
 
     st.markdown("---")
 
-    # --- PREVIEW IMAGEN ---
-    # Usamos un thumbnail para que vaya rápido en el móvil
+    # --- PREVIEW (Baja resolución para velocidad) ---
     img_original = Image.open(current_file)
     img_thumb = img_original.copy()
-    img_thumb.thumbnail((600, 600))
+    img_thumb.thumbnail((600, 600)) # Solo para ver en pantalla
     
-    img_processed = aplicar_watermark(
+    img_preview = aplicar_watermark(
         img_thumb, 
         current_conf["color"], 
         current_conf["opacidad"], 
         current_conf["tamano"]
     )
-    st.image(img_processed, use_column_width=True)
+    st.image(img_preview, use_column_width=True)
 
-    # --- CONTROLES DESLIZANTES ---
-    st.info("Ajusta esta foto:")
-    
-    # 1. Color
-    new_color = st.radio(
-        "Color del Logo", 
-        ["Blanco", "Negro"], 
-        index=0 if current_conf["color"] == "Blanco" else 1,
-        horizontal=True
-    )
-    
-    # 2. Opacidad
+    # --- CONTROLES ---
+    new_color = st.radio("Color", ["Blanco", "Negro"], index=0 if current_conf["color"] == "Blanco" else 1, horizontal=True)
     new_opacidad = st.slider("Opacidad (%)", 0, 100, current_conf["opacidad"])
-    
-    # 3. Tamaño
     new_tamano = st.slider("Tamaño (%)", 10, 100, current_conf["tamano"])
 
-    # --- GUARDADO AUTOMÁTICO ---
-    # Si detectamos cambios, actualizamos la memoria y recargamos
     if (new_color != current_conf["color"] or 
         new_opacidad != current_conf["opacidad"] or 
         new_tamano != current_conf["tamano"]):
-        
         st.session_state.settings[file_id] = {
-            "color": new_color,
-            "opacidad": new_opacidad,
-            "tamano": new_tamano
+            "color": new_color, "opacidad": new_opacidad, "tamano": new_tamano
         }
         st.rerun()
 
     st.markdown("---")
 
-    # --- ZONA DE DESCARGA ---
-    if st.button("✅ TERMINAR Y DESCARGAR ZIP", type="primary"):
-        
-        zip_buffer = io.BytesIO()
-        barra = st.progress(0)
-        status = st.empty()
-        
-        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-            for i, file in enumerate(uploaded_files):
-                status.text(f"Procesando {i+1} de {total_imgs}...")
-                
-                # Usamos la config guardada o el default (100% tamaño, 40% opacidad)
-                conf = st.session_state.settings.get(file.name, {
-                    "color": "Blanco", "opacidad": 40, "tamano": 100
-                })
-                
-                # Procesamos la imagen original en alta calidad
-                original = Image.open(file)
-                final = aplicar_watermark(original, conf["color"], conf["opacidad"], conf["tamano"])
-                
-                # Guardamos
-                img_bytes = io.BytesIO()
-                final.save(img_bytes, format="JPEG", quality=95)
-                zip_file.writestr(f"Logo_{file.name}", img_bytes.getvalue())
-                
-                barra.progress((i + 1) / total_imgs)
-        
-        status.success("¡Completado!")
-        st.download_button(
-            "⬇️ Descargar Archivo ZIP", 
-            data=zip_buffer.getvalue(), 
-            file_name="fotos_listas.zip", 
-            mime="application/zip"
-        )
+    # --- ZONA DE DESCARGA INDIVIDUAL ---
+    # Procesamos la imagen ORIGINAL (Alta Calidad) en tiempo real para descargarla ya
+    img_hd_final = aplicar_watermark(
+        img_original, # Usamos la original, no el thumbnail
+        current_conf["color"],
+        current_conf["opacidad"],
+        current_conf["tamano"]
+    )
+    
+    # Convertimos a bytes para el botón de descarga
+    buf = io.BytesIO()
+    # CALIDAD MÁXIMA: quality=100, subsampling=0
+    img_hd_final.save(buf, format="JPEG", quality=100, subsampling=0)
+    byte_im = buf.getvalue()
+
+    # Botón grande para descargar SOLO ESTA FOTO
+    st.download_button(
+        label="⬇️ DESCARGAR ESTA FOTO (HD)",
+        data=byte_im,
+        file_name=f"Logo_{current_file.name.split('.')[0]}.jpg",
+        mime="image/jpeg",
+        type="primary" # Lo hace destacar visualmente
+    )
+
+    # --- ZONA DE DESCARGA ZIP (Opcional, por si quieres todas) ---
+    with st.expander("O descargar todas juntas (ZIP)"):
+        if st.button("Generar ZIP de todas"):
+            zip_buffer = io.BytesIO()
+            barra = st.progress(0)
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                for i, file in enumerate(uploaded_files):
+                    conf = st.session_state.settings.get(file.name, {"color": "Blanco", "opacidad": 40, "tamano": 100})
+                    orig = Image.open(file)
+                    final = aplicar_watermark(orig, conf["color"], conf["opacidad"], conf["tamano"])
+                    
+                    b = io.BytesIO()
+                    final.save(b, format="JPEG", quality=100, subsampling=0)
+                    zip_file.writestr(f"Logo_{file.name}", b.getvalue())
+                    barra.progress((i+1)/total_imgs)
+            
+            st.download_button("💾 Bajar ZIP", data=zip_buffer.getvalue(), file_name="fotos_todas.zip", mime="application/zip")
